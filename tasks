@@ -1,0 +1,50 @@
+
+import discord
+import gspread
+import os
+from discord.ext import commands
+from oauth2client.service_account import ServiceAccountCredentials
+from datetime import datetime
+
+# 🛠️ Bot Setup
+intents = discord.Intents.default()
+intents.members = True
+intents.guilds = True
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+# 📝 Google Sheets Setup
+SHEET_PATH = "/storage/emulated/0/Download/total-yen-451014-t7-a64ab239547c.json"
+SHEET_NAME = "Moderation Logs"
+
+# ✅ Google Sheets Auth
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds = ServiceAccountCredentials.from_json_keyfile_name(SHEET_PATH, scope)
+client = gspread.authorize(creds)
+sheet = client.open(SHEET_NAME).sheet1
+
+# 📌 Function to Log Data to Google Sheets
+def log_to_sheet(member, action, duration, reason):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    data = [timestamp, member.display_name, member.name, str(member.id), action, duration, reason]
+    
+    try:
+        sheet.append_row(data)
+        print(f"✅ Log added to Google Sheets: {data}")
+    except Exception as e:
+        print(f"❌ Error logging to Google Sheets: {e}")
+
+# 🚨 Event: Timeout Logging
+@bot.event
+async def on_member_update(before, after):
+    if before.timed_out_until != after.timed_out_until:
+        action = "Timeout" if after.timed_out_until else "Timeout Removed"
+        duration = after.timed_out_until.strftime("%Y-%m-%d %H:%M:%S") if after.timed_out_until else "N/A"
+        
+        reason = "Unknown (Discord API Limitations)"
+        
+        print(f"⚠️ Detected Timeout: {after.display_name} | Action: {action} | Duration: {duration}")
+        log_to_sheet(after, action, duration, reason)
+
+# 🔥 Run the Bot
+TOKEN = os.getenv("DISCORD_TOKEN")
+bot.run(TOKEN)
